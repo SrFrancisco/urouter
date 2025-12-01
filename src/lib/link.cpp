@@ -3,6 +3,7 @@
 RawSocket::~RawSocket() { _cleanup(); }
 
 RawSocket::RawSocket(std::string network_iface)
+:iface_mame(network_iface)
 {
     // Initialize dest struct
     // see packet(7) man
@@ -29,6 +30,7 @@ RawSocket::RawSocket(std::string network_iface)
 
 void RawSocket::blockingSend(void* buf, size_t buf_size)
 {
+    std::cout << "==> Sending msg" << std::endl;
     assert(buf != nullptr);
     assert(socketfd > 0);
     int rc = send(socketfd, buf, buf_size,0);

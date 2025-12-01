@@ -23,6 +23,7 @@
 #include <linux/if_packet.h>
 #include <net/ethernet.h> /* the L2 protocols */
 #include <utility>
+#include "l2.h"
 #include <netinet/ip.h> // see: https://stackoverflow.com/questions/42840636/difference-between-struct-ip-and-struct-iphdr
 
 static constexpr unsigned long MAX_BUFFER = 1 << 13;
@@ -30,6 +31,8 @@ static constexpr unsigned long MAX_BUFFER = 1 << 13;
 struct RawSocket {
     struct sockaddr_ll socket_addr;
     int socketfd;
+    MAC_addr mac;
+    std::string iface_mame;
 
     RawSocket(std::string network_iface);
 

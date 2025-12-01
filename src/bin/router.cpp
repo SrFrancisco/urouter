@@ -1,21 +1,52 @@
+#include "arp.h"
 #include "link.h"
+#include <arpa/inet.h>
+#include <csignal>
+#include <cstdlib>
+#include <iostream>
+#include <net/ethernet.h>
+#include <netinet/in.h>
 
-int main()
-{
-    // test server
-    char buf[MAX_BUFFER] = {};
-    sprintf(buf, "%s", "TEST SEND");
+volatile sig_atomic_t stop;
+void st([[maybe_unused]] int signum) { stop = 1; }
 
-    std::cout << "Starting raw socket" << std::endl;
-    RawSocket socket("lo");
-    std::cout << "Sending Packet" << std::endl;
-    socket.blockingSend(buf, MAX_BUFFER);
-    
-    char buf2[MAX_BUFFER] = {};
-    std::cout << "Waiting for Packet" << std::endl;
-    socket.blockingRecv(buf2, MAX_BUFFER);
-    std::cout << "done" << std::endl;
-    std::cout << std::string(buf2) << std::endl;
-    
-    return 0;
+// Router main loop
+int main(int argc, char *argv[]) {
+
+  if (argc < 2) {
+    std::cerr << "Usage ./server dev default" << std::endl;
+    return 1;
+  }
+
+  std::string def_gateway = "";
+  if (argc == 3)
+    def_gateway = std::string(argv[2]);
+
+  RawSocket socket(argv[1]);
+  ARP_Service arp(socket);
+
+  // signal(SIGINT, st);
+
+  char *buffer = (char *)malloc(MAX_BUFFER);
+
+  // advertise
+  if (def_gateway != "")
+    arp.broadcast_arp_requests(inet_addr(def_gateway.c_str()));
+
+  while (true) {
+    socket.blockingRecv(buffer, MAX_BUFFER);
+
+    struct ether_header *header =
+        reinterpret_cast<struct ether_header *>(buffer);
+    if (header->ether_type == htons(ARP)) {
+      std::cout << "Received a ARP packet!" << std::endl;
+      arp.process_arp_packet(buffer, MAX_BUFFER, sizeof(ether_header));
+    } else if (header->ether_type == htons(IPv4))
+      std::cerr << "IPv4 not yet implemented" << std::endl;
+    else
+      std::cerr << "Eth frame with type " << header->ether_type
+                << " unrecognized! DROP!" << std::endl;
+  }
+  std::cout << "Stopping" << std::endl;
+  return 0;
 }
