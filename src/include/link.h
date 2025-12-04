@@ -28,6 +28,11 @@
 
 static constexpr unsigned long MAX_BUFFER = 1 << 13;
 
+enum ETH_OP_TYPE : uint16_t {
+  IPv4 = 0x0800,
+  ARP = 0x0806,
+};
+
 struct RawSocket {
     struct sockaddr_ll socket_addr;
     int socketfd;
