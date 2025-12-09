@@ -48,6 +48,10 @@ def activate_veth(ns:int, num:int):
     run_with_ns(ns,f"ip link set veth_urouter{num} up")
     run_with_ns(ns,f"ip link set lo up")
 
+def add_ip(ip:str, ns:int, cidr:int=24):
+    run_with_ns(ns, f"ip addr add {ip}/{cidr} dev veth_urouter{ns}")
+    run_with_ns(ns, f"ip link set veth_urouter{ns} up")
+
 # ==============================================================================
 # TOPO
 # ==============================================================================
@@ -64,9 +68,11 @@ def create_topo_2_links():
     set_veth(2,2)
 
     print("--- NS 1 ---")
+    add_ip("192.168.4.1",1)
     print(run_with_ns(1, "ip a").stdout.decode())
 
     print("--- NS 2 ---")
+    add_ip("192.168.4.2",2)
     print(run_with_ns(2, "ip a").stdout.decode())
 
 def cleanup_topo_2_links():
