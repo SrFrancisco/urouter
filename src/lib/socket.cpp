@@ -1,4 +1,6 @@
 #include "socket.h"
+#include "message.h"
+#include <net/ethernet.h>
 
 RawSocket::~RawSocket() { _cleanup(); }
 
@@ -48,6 +50,7 @@ void RawSocket::blockingRecv(void *buf, size_t buf_size) {
 size_t generate_ether_header(char *buffer, size_t buf_size, uint16_t protocol,
                              MAC_addr &src, MAC_addr &dest) {
   assert(buf_size >= sizeof(struct ether_header));
+  ASSERT_ALIGNMENT(buffer, struct ether_header);
 
   memset(buffer, 0, sizeof(struct ether_header));
   struct ether_header *header = reinterpret_cast<struct ether_header *>(buffer);

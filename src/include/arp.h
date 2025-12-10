@@ -3,7 +3,6 @@
 /** This file implements the ARP protocol and an ARP table */
 
 #include "socket.h"
-#include <array>
 #include <cstddef>
 #include <cstdint>
 #include <link.h>

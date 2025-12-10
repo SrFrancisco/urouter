@@ -3,6 +3,9 @@
 #include <cstddef>
 #include <cstdint>
 
+#define ASSERT_ALIGNMENT(BUF,TYPE) \
+  (assert(reinterpret_cast<uintptr_t>(BUF) % alignof(TYPE) == 0))
+
 template <typename T>
 struct L2Message {
   using type = T;
@@ -16,7 +19,7 @@ struct L2Message {
 struct arp_request : L2Message<arp_request> {
   static constexpr uint16_t ETHER_TYPE = 0x0806;
 
-  uint16_t hrd; /** Hardware Type */
+  uint16_t hrd;   /** Hardware Type */
   uint16_t pro;   /** Protocol Type */
   uint8_t hln;    /** Hardware Length */
   uint8_t pln;    /** Protocol Length */

@@ -1,4 +1,5 @@
 #include "arp.h"
+#include "message.h"
 #include "socket.h"
 #include <arpa/inet.h>
 #include <cassert>
@@ -76,6 +77,7 @@ void ARP_Service::broadcast_arp_requests(uint32_t target_ip_no) {
       generate_ether_header(buf, MAX_BUFFER, ARP, _own_addr, _BROADCAST);
   assert(MAX_BUFFER >= sizeof(arp_request) + stride);
 
+  ASSERT_ALIGNMENT(buf+stride, arp_request);
   struct arp_request *req =
       reinterpret_cast<struct arp_request *>(buf + stride);
   memset(req, 0, sizeof(struct arp_request));
@@ -99,6 +101,8 @@ void ARP_Service::process_arp_packet(char *buf, size_t buf_size,
                                      size_t stride) {
   // we assume that the buf will be pointing to the struct
   assert(MAX_BUFFER >= stride + sizeof(arp_request));
+  
+  ASSERT_ALIGNMENT(stride+buf, arp_request);
   struct arp_request *req =
       reinterpret_cast<struct arp_request *>(stride + buf);
 
