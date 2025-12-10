@@ -2,7 +2,7 @@
 
 /** This file implements the ARP protocol and an ARP table */
 
-#include "l2.h"
+#include "socket.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -25,19 +25,7 @@ public:
   void print();
 };
 
-struct arp_request {
-  uint16_t hrd;   /** Hardware Type */
-  uint16_t pro;   /** Protocol Type */
-  uint8_t hln;    /** Hardware Length */
-  uint8_t pln;    /** Protocol Length */
-  uint16_t op;    /** Operation */
-  uint8_t sha[6]; /** Sender Hardware Address */
-  uint32_t spa;   /** Sender protocol address */
-  uint8_t tha[6]; /** Target hardware address */
-  uint32_t tpa;   /** Target protocol address */
-} __attribute__((__packed__));
-
-class ARP_Service : L2 {
+class ARP_Service {
 private:
   MAC_addr _own_addr;
   uint32_t _own_ip;

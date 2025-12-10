@@ -1,5 +1,5 @@
 #include "arp.h"
-#include "l2.h"
+#include "socket.h"
 #include <arpa/inet.h>
 #include <cassert>
 #include <cstddef>
@@ -41,12 +41,12 @@ void ARP_Table::print() {
   std::cout << " --- END ARP TABLE ---" << std::endl << std::endl;
 }
 
-ARP_Service::ARP_Service(RawSocket &sock) : L2(), _socket(sock), _BROADCAST() {
+ARP_Service::ARP_Service(RawSocket &sock) : _socket(sock), _BROADCAST() {
   // set mac
   struct ifreq ifr;
   assert(sock.iface_mame.size() < IFNAMSIZ);
   memcpy(ifr.ifr_name, sock.iface_mame.c_str(), IFNAMSIZ);
-  ioctl(sock.socketfd, SIOCGIFHWADDR, &ifr);
+  assert(ioctl(sock.socketfd, SIOCGIFHWADDR, &ifr) == 0);
   const uint8_t *u_mac = (uint8_t *)ifr.ifr_hwaddr.sa_data;
   printf("Local MAC Address : %02x:%02x:%02x:%02x:%02x:%02x\n", u_mac[0],
          u_mac[1], u_mac[2], u_mac[3], u_mac[4], u_mac[5]);
@@ -58,17 +58,22 @@ ARP_Service::ARP_Service(RawSocket &sock) : L2(), _socket(sock), _BROADCAST() {
   struct ifreq ifr_ip;
   assert(sock.iface_mame.size() < IFNAMSIZ);
   memcpy(ifr_ip.ifr_name, sock.iface_mame.c_str(), IFNAMSIZ);
-  assert(ioctl(sock.socketfd, SIOCGIFADDR, &ifr_ip) == 0);
-  auto addr = (struct sockaddr_in *)&ifr_ip.ifr_addr;
-  auto address = inet_ntoa(addr->sin_addr);
-  std::cout << "IP ADDR: " << address << std::endl;
-  _own_ip = inet_addr(address);
+  if (ioctl(sock.socketfd, SIOCGIFADDR, &ifr_ip) == 0) {
+    auto addr = (struct sockaddr_in *)&ifr_ip.ifr_addr;
+    auto address = inet_ntoa(addr->sin_addr);
+    std::cout << "IP ADDR: " << address << std::endl;
+    _own_ip = {inet_addr(address)};
+  } else {
+    // could not get the IP addr
+    // TODO: This could be expected behaviour in I want to implement DHCP
+    assert(false); // for now we assume if must have one
+  }
 }
 
 void ARP_Service::broadcast_arp_requests(uint32_t target_ip_no) {
   char *buf = (char *)malloc(MAX_BUFFER); // TODO: Impl circular buffer
   size_t stride =
-      L2::generate_ether_header(buf, MAX_BUFFER, ARP, _own_addr, _BROADCAST);
+      generate_ether_header(buf, MAX_BUFFER, ARP, _own_addr, _BROADCAST);
   assert(MAX_BUFFER >= sizeof(arp_request) + stride);
 
   struct arp_request *req =
@@ -86,7 +91,7 @@ void ARP_Service::broadcast_arp_requests(uint32_t target_ip_no) {
   std::copy(_own_addr.addr.begin(), _own_addr.addr.end(), req->sha);
 
   _socket.blockingSend(buf, stride + sizeof(struct arp_request));
-  
+
   free(buf);
 }
 

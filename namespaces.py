@@ -68,11 +68,11 @@ def create_topo_2_links():
     set_veth(2,2)
 
     print("--- NS 1 ---")
-    add_ip("192.168.4.1",1)
+    add_ip("192.168.3.1",1)
     print(run_with_ns(1, "ip a").stdout.decode())
 
     print("--- NS 2 ---")
-    add_ip("192.168.4.2",2)
+    add_ip("192.168.3.2",2)
     print(run_with_ns(2, "ip a").stdout.decode())
 
 def cleanup_topo_2_links():
