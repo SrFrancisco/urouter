@@ -42,7 +42,10 @@ void ARP_Table::print() {
   std::cout << " --- END ARP TABLE ---" << std::endl << std::endl;
 }
 
-ARP_Service::ARP_Service(RawSocket &sock) : _socket(sock), _BROADCAST() {
+ARP_Service::ARP_Service(RawSocket &sock, char* buf, size_t buf_len) : 
+_socket(sock), _BROADCAST(), buffer(buf), buffer_len(buf_len) {
+  std::memset(buffer, 0, buf_len);
+
   // set mac
   struct ifreq ifr;
   assert(sock.iface_mame.size() < IFNAMSIZ);
@@ -72,14 +75,14 @@ ARP_Service::ARP_Service(RawSocket &sock) : _socket(sock), _BROADCAST() {
 }
 
 void ARP_Service::broadcast_arp_requests(uint32_t target_ip_no) {
-  char *buf = (char *)malloc(MAX_BUFFER); // TODO: Impl circular buffer
+  // TODO: Impl circular buffer
   size_t stride =
-      generate_ether_header(buf, MAX_BUFFER, ARP, _own_addr, _BROADCAST);
+      generate_ether_header(buffer, MAX_BUFFER, ARP, _own_addr, _BROADCAST);
   assert(MAX_BUFFER >= sizeof(arp_request) + stride);
 
-  ASSERT_ALIGNMENT(buf+stride, arp_request);
+  ASSERT_ALIGNMENT(buffer+stride, arp_request);
   struct arp_request *req =
-      reinterpret_cast<struct arp_request *>(buf + stride);
+      std::launder(reinterpret_cast<struct arp_request *>(buffer + stride));
   memset(req, 0, sizeof(struct arp_request));
 
   req->hrd = htons(1);
@@ -92,19 +95,20 @@ void ARP_Service::broadcast_arp_requests(uint32_t target_ip_no) {
 
   std::copy(_own_addr.addr.begin(), _own_addr.addr.end(), req->sha);
 
-  _socket.blockingSend(buf, stride + sizeof(struct arp_request));
+  _socket.blockingSend(buffer, stride + sizeof(struct arp_request));
 
-  free(buf);
 }
+
 
 void ARP_Service::process_arp_packet(char *buf, size_t buf_size,
                                      size_t stride) {
   // we assume that the buf will be pointing to the struct
   assert(MAX_BUFFER >= stride + sizeof(arp_request));
+  assert(stride < buf_size && buf_size <= MAX_BUFFER);
   
   ASSERT_ALIGNMENT(stride+buf, arp_request);
   struct arp_request *req =
-      reinterpret_cast<struct arp_request *>(stride + buf);
+      std::launder(reinterpret_cast<struct arp_request *>(stride + buf));
 
   {
     struct in_addr ip_addr;
@@ -134,21 +138,25 @@ void ARP_Service::process_arp_packet(char *buf, size_t buf_size,
     auto remote_ip = req->spa;
     _arp_table.insert_or_update({remote_ip, remote_mac});
 
+    size_t stride =
+      generate_ether_header(buffer, MAX_BUFFER, ARP, _own_addr, remote_mac);
+    assert(MAX_BUFFER >= sizeof(arp_request) + stride);
+
+    ASSERT_ALIGNMENT(buffer+stride, arp_request);
+    struct arp_request *resp =
+        std::launder(reinterpret_cast<struct arp_request *>(buffer + stride));
+    memcpy(resp, req, sizeof(struct arp_request));
     // We will use the same memory to send the reply, with the fields swapped
     uint8_t tmp[6];
-    memcpy(tmp, req->sha, 6);
-    memcpy(req->sha, _own_addr.addr.data(), 6);
-    memcpy(req->tha, tmp, 6);
-    uint32_t tmp_ip = req->spa;
-    req->spa = (req->tpa);
-    req->tpa = (tmp_ip);
-    req->op = htons(2);
+    memcpy(tmp, resp->sha, 6);
+    memcpy(resp->sha, _own_addr.addr.data(), 6);
+    memcpy(resp->tha, tmp, 6);
+    uint32_t tmp_ip = resp->spa;
+    resp->spa = (resp->tpa);
+    resp->tpa = (tmp_ip);
+    resp->op = htons(2);
 
-    auto stride_ =
-        generate_ether_header(buf, buf_size, ARP, _own_addr, remote_mac);
-    assert(stride == stride_); // make sure we only wrote the header
-
-    _socket.blockingSend(buf, stride + sizeof(struct arp_request));
+    _socket.blockingSend(buffer, stride + sizeof(struct arp_request));
 
   } else if ((req->pro == htons(IPv4) && req->op == htons(1)) ||
              (req->tpa == htonl(_own_ip) && req->op == htons(2))) {

@@ -11,6 +11,7 @@
 #include <iomanip>
 #include <iostream>
 // #include <linux/ip.h>
+#include <memory>
 #include <new>
 #include <sys/socket.h>
 #include <sys/types.h>
@@ -108,9 +109,18 @@ struct RawSocket {
     using MsgType = // we have ref types
         std::remove_reference_t<typename function_info<Callback>::first_arg>;
     if (MsgType::ETHER_TYPE == type) {
+
+      // this requires the struct to have an implicit lifetime
+      // https://en.cppreference.com/w/cpp/language/classes.html#Implicit-lifetime_class
+      // https://stackoverflow.com/a/78198111
+      static_assert(    std::is_trivially_default_constructible_v<MsgType> 
+                     && std::is_trivially_destructible_v<MsgType>, 
+                     "struct needs to have implicit lifetime");
+
       auto &message = *std::launder(reinterpret_cast<MsgType *>(
           static_cast<uint8_t *>(buffer) + sizeof(ether_header)));
       function(message);
+
     } else {
       apply(buffer, len, callbacks...);
     }

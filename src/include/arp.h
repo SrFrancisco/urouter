@@ -15,6 +15,7 @@ using ARP_Table_Entry = std::pair<uint32_t, MAC_addr>;
 class ARP_Table {
 private:
   std::unordered_map<uint32_t, MAC_addr> _table = {};
+  char* send_buf;
 
 public:
   ARP_Table() = default;
@@ -32,10 +33,13 @@ private:
   RawSocket &_socket;
   MAC_addr _BROADCAST;
 
+  // buffer for preparing packets
+  char* buffer;
+  size_t buffer_len;
+
 public:
-  ARP_Service(RawSocket &sock);
+  ARP_Service(RawSocket &sock, char* buf, size_t buf_len);
 
   void broadcast_arp_requests(uint32_t target_ip);
-
   void process_arp_packet(char *buf, size_t buf_size, size_t stride);
 };

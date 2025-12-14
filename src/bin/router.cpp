@@ -8,6 +8,7 @@
 #include <iostream>
 #include <net/ethernet.h>
 #include <netinet/in.h>
+#include <ostream>
 
 volatile sig_atomic_t stop;
 void st([[maybe_unused]] int signum) { stop = 1; }
@@ -24,12 +25,14 @@ int main(int argc, char *argv[]) {
   if (argc == 3)
     def_gateway = std::string(argv[2]);
 
+
+  char *recv_buffer = (char *)malloc(MAX_BUFFER);
+  char *send_buffer = (char *)malloc(MAX_BUFFER);
+
   RawSocket socket(argv[1]);
-  ARP_Service arp(socket);
+  ARP_Service arp(socket, send_buffer, MAX_BUFFER);
 
   // signal(SIGINT, st);
-
-  char *buffer = (char *)malloc(MAX_BUFFER);
 
   // advertise MAC address at the start
   if (def_gateway != "")
@@ -58,10 +61,11 @@ int main(int argc, char *argv[]) {
 
   while(true)
   {
-    socket.blockingRecvApply(buffer, MAX_BUFFER, 
+    socket.blockingRecvApply(recv_buffer, MAX_BUFFER, 
       [&](arp_request& request){
-        std::cout << "<== Received a ARP packet! " << request.op << std::endl;
-        arp.process_arp_packet(buffer, MAX_BUFFER, sizeof(ether_header));
+        std::cout << "<== Received ARP packet! " << request.op << std::endl;
+        arp.process_arp_packet(recv_buffer, MAX_BUFFER, sizeof(ether_header));
+
       },
       [&]([[maybe_unused]] ipv4_request& request){
         std::cerr << "<== IPv4 not yet implemented" << std::endl;
