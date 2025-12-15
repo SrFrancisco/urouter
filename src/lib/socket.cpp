@@ -1,5 +1,8 @@
 #include "socket.h"
 #include "message.h"
+#include <cassert>
+#include <cerrno>
+#include <cstddef>
 #include <net/ethernet.h>
 #include <type_traits>
 
@@ -56,6 +59,16 @@ void RawSocket::blockingRecv(void *buf, size_t buf_size) {
   }
 }
 
+ssize_t RawSocket::recv(void* buf, size_t buf_size)
+{
+  int rc = ::recv(socketfd, buf, buf_size, 0);
+  if (rc == -1 && errno != EAGAIN) {
+    std::cerr << "Err in recv with errno " << errno << std::endl;
+    _cleanup();
+  }
+  return rc;
+}
+
 size_t generate_ether_header(char *buffer, size_t buf_size, uint16_t protocol,
                              MAC_addr &src, MAC_addr &dest) {
   
@@ -74,4 +87,22 @@ size_t generate_ether_header(char *buffer, size_t buf_size, uint16_t protocol,
   std::copy(std::begin(dest.addr), std::end(dest.addr), header->ether_dhost);
 
   return sizeof(struct ether_header);
+}
+
+void SocketManager::addConnection(std::string network_iface)
+{
+  assert(!_sockets.contains(network_iface));
+  _sockets.emplace(network_iface, network_iface);
+}
+
+void SocketManager::broadcast(void* buf, size_t buf_size)
+{
+  for(auto& [ifname,sock] : _sockets)
+    sock.blockingSend(buf, buf_size);
+}
+
+void SocketManager::sendTo(std::string iface, void* buf, size_t buf_size)
+{
+  assert(_sockets.contains(iface));
+  _sockets.at(iface).blockingRecv(buf, buf_size);
 }

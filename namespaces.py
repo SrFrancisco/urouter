@@ -17,8 +17,9 @@ def run(arg:str):
 def _run(arg:list[str]):
     try:
         result = subprocess.run(arg, stdout=subprocess.PIPE)
+        result.check_returncode()
     except subprocess.CalledProcessError as e:
-        print("ERROR: ", e)
+        print("\033[0;31m", "ERROR: ", e, "\033[0m")
         exit(1)
     return result
 
@@ -48,9 +49,9 @@ def activate_veth(ns:int, num:int):
     run_with_ns(ns,f"ip link set veth_urouter{num} up")
     run_with_ns(ns,f"ip link set lo up")
 
-def add_ip(ip:str, ns:int, cidr:int=24):
-    run_with_ns(ns, f"ip addr add {ip}/{cidr} dev veth_urouter{ns}")
-    run_with_ns(ns, f"ip link set veth_urouter{ns} up")
+def add_ip(ip:str, ns:int, cidr:int=24, veth:int=-1):
+    run_with_ns(ns, f"ip addr add {ip}/{cidr} dev veth_urouter{ns if veth==-1 else veth}")
+    run_with_ns(ns, f"ip link set veth_urouter{ns if veth==-1 else veth} up")
 
 # ==============================================================================
 # TOPO
@@ -79,6 +80,37 @@ def cleanup_topo_2_links():
     delete_namespace(1)
     delete_namespace(2)
 
+def create_topo_3_links():
+    """
+    192.168.3.1                   192.168.3.4  
+    [NS 1] <-----> [SWITCH] <-----> [NS 2]
+    """
+    create_namespace(1); create_namespace(2); create_namespace(3);
+    print()
+    create_veth(1,2); create_veth(3,4)
+    print()
+    set_veth(1,1)
+    print()
+    set_veth(2,2)
+    print()
+    set_veth(3,2)
+    print()
+    set_veth(4,3)
+
+    print("--- NS 1 ---")
+    add_ip("192.168.3.1",1)
+    #print(run_with_ns(1, "ip a").stdout.decode())
+
+    print("--- SWITCH ---")
+    run_with_ns(2,"ip link set veth_urouter2 up")
+    run_with_ns(2,"ip link set veth_urouter3 up")
+
+    print("--- NS 2 ---")
+    add_ip("192.168.3.4",3, veth=4)
+    #print(run_with_ns(3, "ip a").stdout.decode())
+
+def cleanup_topo_3_links():
+    delete_namespace(1); delete_namespace(2); delete_namespace(3)
 
 # ==============================================================================
 # ARGS
@@ -97,9 +129,9 @@ if __name__=='__main__':
         exit(1)
 
     if sys.argv[1] == 'create':
-        create_topo_2_links()
+        create_topo_3_links()
     elif sys.argv[1] == 'remove':
-        cleanup_topo_2_links()
+        cleanup_topo_3_links()
     
 
     

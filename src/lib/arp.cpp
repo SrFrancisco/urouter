@@ -13,6 +13,9 @@
 #include <optional>
 #include <sys/ioctl.h>
 
+#define ARP_REQUEST (htons(1))
+#define ARP_ANSWER (htons(2))
+
 std::optional<ARP_Table_Entry> ARP_Table::query(uint32_t ip) {
   if (auto it = _table.find(ip); it != _table.end())
     return {{it->first, it->second}};
@@ -131,9 +134,7 @@ void ARP_Service::process_arp_packet(char *buf, size_t buf_size,
       && req->tpa == htonl(_own_ip) // am I the target protocol address?
       && req->op == htons(1)        // request
   ) {
-    //
-    // ARP REQUEST
-    //
+    // the request is directed at the switch
     auto remote_mac = MAC_addr::from_c_struct(req->sha);
     auto remote_ip = req->spa;
     _arp_table.insert_or_update({remote_ip, remote_mac});
@@ -154,7 +155,7 @@ void ARP_Service::process_arp_packet(char *buf, size_t buf_size,
     uint32_t tmp_ip = resp->spa;
     resp->spa = (resp->tpa);
     resp->tpa = (tmp_ip);
-    resp->op = htons(2);
+    resp->op = ARP_ANSWER;
 
     _socket.blockingSend(buffer, stride + sizeof(struct arp_request));
 

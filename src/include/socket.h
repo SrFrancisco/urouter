@@ -8,8 +8,10 @@
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
+#include <functional>
 #include <iomanip>
 #include <iostream>
+#include <string>
 // #include <linux/ip.h>
 #include <memory>
 #include <new>
@@ -26,6 +28,7 @@
 #include <sys/socket.h>
 #include <type_traits>
 #include <unistd.h>
+#include <unordered_map>
 
 // based on the code in
 // https://ventspace.wordpress.com/2022/04/11/quick-snippet-c-type-trait-templates-for-lambda-details/
@@ -75,6 +78,19 @@ struct MAC_addr {
         << (int)addr[4] << ":" << std::setw(2) << (int)addr[5];
     return oss.str();
   }
+
+};
+
+bool inline operator==(const MAC_addr& lhs, const MAC_addr& rhs) {
+  return lhs.addr == rhs.addr;
+}
+
+template<> struct std::hash<MAC_addr> {
+  std::size_t operator()(MAC_addr const& s) const noexcept {
+      uint64_t value = 0;
+      std::memcpy(&value, s.addr.data(), 6);
+      return std::hash<uint64_t>{}(value);
+  }
 };
 
 size_t generate_ether_header(char *buffer, size_t buf_size, uint16_t protocol,
@@ -91,6 +107,7 @@ struct RawSocket {
   ~RawSocket();
 
   void blockingRecv(void *buf, size_t buf_size);
+  ssize_t recv(void* buf, size_t buf_size);
 
   /**
    * WARN! This function will not verify the structure of the payload. Make
@@ -144,4 +161,43 @@ private:
     close(socketfd);
     socketfd = -1; // just in case
   }
+};
+
+
+class SocketManager {
+private:
+  std::unordered_map<std::string,RawSocket> _sockets{};
+public:
+  SocketManager() = default;
+  void addConnection(std::string network_iface);
+  
+  template <typename... Args>
+  void recvApplyAll(void *buf, size_t buf_size, Args... callbacks) {
+    ssize_t rc;
+
+    //TODO: may want to use select/poll or have one thread for each iface
+    for(auto& [ifname,sock] : _sockets)
+    {
+      rc = sock.recv(buf, buf_size);
+      if(rc != -1)
+        sock.apply(buf, buf_size, callbacks...);
+    }  
+  }
+
+  void L2recvApplyAll(void* buf, size_t buf_size,
+                      std::function<void(struct ether_header header, std::string iface, ssize_t total_size)> callback) {
+    ssize_t rc;
+    for(auto& [ifname,sock] : _sockets)
+    {
+      rc = sock.recv(buf, buf_size);
+      if(rc != -1) {
+        struct ether_header header = *static_cast<struct ether_header *>(buf);
+        callback(header, ifname, rc);
+      }
+    } 
+
+  }
+
+  void broadcast(void* buf, size_t buf_size);
+  void sendTo(std::string iface, void* buf, size_t buf_size);
 };
